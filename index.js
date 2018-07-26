@@ -6,6 +6,7 @@ const generate = require('babel-generator');
 const t = require('babel-types');
 
 const { SourceMapConsumer } = require('source-map');
+
 const {
   parse,
   readSource,
@@ -17,33 +18,11 @@ const {
   searchCode
 } = require('./utils');
 
-const FILE_NAME = 'react-dom-lite.js';
-const MAIN_FILE = join(
-  // getDir(
-  //   resolveFileName(
-  //     'react-reconciler',
-  //     process.cwd()
-  //   )
-  // ),
-  // 'cjs',
-  // 'react-reconciler.development.js'
-  __dirname,
-  FILE_NAME
-);
-
-const MAIN_FILE_CONTENTS = readSource(MAIN_FILE);
-
 let hostConfigDeclarations = [];
 
-// module.exports = function(outputFilePath) {
-//   const topLevelDeclarations = collectTypes(MAIN_FILE);
-//   const typeDeclarationsAST = bundle(topLevelDeclarations);
-//   write(outputFilePath, generate.default(typeDeclarationsAST).code);
-// };
-
-function getReconcilerCall() {
+module.exports = function inlineHostConfigDeclarations(ast, srcReconcilerJSPath, sourceMapPathFullyResolved) {
   const sourceMapJSON = JSON.parse(
-    fs.readFileSync('./react-dom-lite.js.map').toString()
+    fs.readFileSync(sourceMapPathFullyResolved).toString()
   );
 
   const consumerPromise = new SourceMapConsumer(sourceMapJSON);
@@ -53,7 +32,7 @@ function getReconcilerCall() {
 
   // get position in source
   const RECONCILER_JS_SOURCE = readSource(
-    '/Users/manas/development/prometheansacrifice/react-dom-lite/src/Reconciler.js'
+    srcReconcilerJSPath
   );
 
   const { line, code, pos } = searchCode(
@@ -92,7 +71,6 @@ function getReconcilerCall() {
     });
 
     // I should probably avoid multiple traversals. But for now I'm going to do it anyway
-    const ast = parse(MAIN_FILE_CONTENTS);
 
 
     traverse.default(ast, {
@@ -184,7 +162,6 @@ function getReconcilerCall() {
               let nonHostConfigDeclarators = declarations.filter(
                 declarator => hostConfigProps.indexOf(declarator.id.name) === -1
               );
-              // console.log(hostConfigVarDeclarators[0].type, nonHostConfigDeclarators.length, 'will be transformed')
 
               const inlinedHostConfigDeclarators = hostConfigVarDeclarators.concat(
                 nonHostConfigDeclarators
@@ -192,8 +169,6 @@ function getReconcilerCall() {
               if (inlinedHostConfigDeclarators.length) {
                 vPath.node.declarations = inlinedHostConfigDeclarators;
               } else {
-                // console.log(hostConfigFunctionDeclarations)
-                // TODO: This will run for each var declaration inside reconciler()
                 vPath.replaceWithMultiple(hostConfigFunctionDeclarations)
               }
             }
@@ -202,13 +177,28 @@ function getReconcilerCall() {
       }
     });
 
-    // write('tmp.js', generate.default(ast).code);
     return generate.default(ast).code;
   });
 }
 
-module.exports = function main() {
-  return getReconcilerCall();
-}
+// const MAIN_FILE_CONTENTS = readSource(
+//   join(
+//     __dirname,
+//     'react-dom-lite.js'
+//   )
+// );
 
-// main();
+// if (!process.env.SRC_RECONCILER_PATH) {
+//   console.log('No SRC_RECONCILER_PATH in env')
+// }
+
+// const result = inlineHostConfigDeclarations(
+//   parse(MAIN_FILE_CONTENTS)
+//   process.env.SRC_RECONCILER_PATH,
+//   join(
+//     __dirname,
+//     'react-dom-lite.js.map'
+//   )
+// );
+
+// write('tmp.js', result);
